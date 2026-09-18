@@ -14,8 +14,12 @@ uso em produção (ver riscos abaixo).
 - Novo acompanhamento (followup).
 - Nova tarefa.
 - Nova solução proposta.
-- Mudança de status, prioridade, urgência, impacto ou categoria.
-- Técnico ou grupo atribuído/removido (atores do tipo "Atribuído").
+- Mudança de status, prioridade, urgência ou impacto.
+
+A partir da v1.4.0, mudança de **categoria** e atribuição/remoção de
+**técnico ou grupo** deixaram de gerar nota — mudavam com frequência alta
+demais no dia a dia e o volume de notas geradas não tinha valor real de
+acompanhamento (ver Versões).
 
 Todas as notas geradas no pai são sempre marcadas como **privadas**,
 independente da visibilidade do conteúdo original no chamado filho — o
@@ -43,9 +47,19 @@ ao ser replicado no pai. Todas as notas citam
 - Ruído em chamados pai com muitos filhos ativos é esperado por design: cada
   nota carrega o prefixo `[Sincronizado do chamado filho #N]`, o que permite
   localizar/filtrar rapidamente as notas de um filho específico; mudanças de
-  múltiplos campos num mesmo evento (status, prioridade, urgência, impacto,
-  categoria) já são agrupadas em uma única nota, em vez de uma por campo.
+  múltiplos campos num mesmo evento (status, prioridade, urgência, impacto)
+  já são agrupadas em uma única nota, em vez de uma por campo. Categoria e
+  atribuição de técnico/grupo foram removidas da propagação em v1.4.0 por
+  gerarem ruído desproporcional ao valor da informação.
 - Não propaga na direção pai → filho (evita loop e não foi solicitado).
+- A partir da v1.3.0, assim que o chamado **pai** chega a **Solucionado**
+  (o que também cobre **Fechado**, que vem depois no fluxo do GLPI), a
+  propagação é bloqueada e registrada no log. A partir desse momento o
+  chamado pai só volta a receber atualização se o usuário reabri-lo
+  manualmente — evita que uma nota automática o reabra indevidamente e
+  preserva as estatísticas/SLA a partir da solução. Não há checagem
+  equivalente sobre o status do **filho**: qualquer evento nele, mesmo
+  tardio, ainda dispara a tentativa de propagação.
 
 ## Instalação
 
@@ -61,17 +75,27 @@ ao ser replicado no pai. Todas as notas citam
 1. Crie o chamado A (pai) e o chamado B (filho).
 2. Em B, na aba "Chamados vinculados", adicione um vínculo com A do tipo
    "Filho de".
-3. Em B, adicione um acompanhamento, ou altere status/prioridade/categoria,
-   ou atribua um técnico.
+3. Em B, adicione um acompanhamento, ou altere status/prioridade/urgência/
+   impacto.
 4. Volte no chamado A e confira se a nota automática apareceu.
 
 Se nada aparecer, verifique o log de erros do GLPI (normalmente em
 `files/_log/php-errors.log` dentro da instalação) para mensagens de erro
-do PHP. Bloqueios pela checagem de entidade (v1.1.0+) aparecem em
-`files/_log/ticketlinksync.log`.
+do PHP. Bloqueios pela checagem de entidade (v1.1.0+) ou de status do pai
+(v1.3.0+) aparecem em `files/_log/ticketlinksync.log`.
 
 ## Versões
 
+- **1.4.0** — remove a propagação de mudança de **categoria** e de
+  **atribuição/remoção de técnico ou grupo** — geravam volume alto de notas
+  sem valor real de acompanhamento. Continuam sendo propagados: novo
+  acompanhamento, tarefa, solução e mudança de status/prioridade/urgência/
+  impacto.
+- **1.3.0** — o corte de status do pai passa a ser em **Solucionado** (em
+  vez de só Fechado), já que a partir daí o chamado só recebe atualização
+  se for reaberto manualmente.
+- **1.2.0** — não propaga mais para um chamado pai já Fechado (evita
+  reabertura indevida e preserva SLA/estatísticas de chamados encerrados).
 - **1.1.0** — adiciona checagem de entidade antes de propagar a nota (evita
   vazamento entre entidades diferentes do GLPI).
 - **1.0.0** — versão inicial, testada com sucesso em homologação (GLPI 11)

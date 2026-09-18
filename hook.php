@@ -123,6 +123,21 @@ function plugin_ticketlinksync_add_parent_followup(int $child_tickets_id, string
             continue;
         }
 
+        // A partir do momento em que o chamado pai chega a Solucionado, ele
+        // so volta a receber atualizacao se o usuario reabrir manualmente —
+        // entao paramos de propagar notas automaticas a partir daqui (o que
+        // cobre tambem o status Fechado, que vem depois de Solucionado no
+        // fluxo do GLPI). Isso evita reabertura indevida via nota automatica
+        // e preserva as estatisticas/SLA do chamado a partir da solucao.
+        if ((int) $parent_ticket->fields['status'] >= Ticket::SOLVED) {
+            Toolbox::logInFile('ticketlinksync', sprintf(
+                "Propagacao bloqueada: chamado pai #%d esta Solucionado/Fechado, nota do filho #%d nao foi gravada.\n",
+                $parent_id,
+                $child_tickets_id
+            ));
+            continue;
+        }
+
         $processing[$parent_id] = true;
 
         $followup = new ITILFollowup();
@@ -208,8 +223,10 @@ function plugin_ticketlinksync_solution_add(ITILSolution $item)
 }
 
 // ---------------------------------------------------------------------
-// Alteracoes de campos do chamado (status, prioridade, urgencia, impacto,
-// categoria)
+// Alteracoes de campos do chamado (status, prioridade, urgencia, impacto)
+//
+// Categoria foi removida da lista em v1.4.0: mudava com frequencia alta
+// demais e gerava ruido sem valor de acompanhamento real.
 // ---------------------------------------------------------------------
 
 function plugin_ticketlinksync_format_field_value(string $type, $value, string $dropdown_itemtype = '')
@@ -241,11 +258,10 @@ function plugin_ticketlinksync_ticket_update(Ticket $item)
     }
 
     $tracked_fields = [
-        'status'            => ['label' => __('Status'),     'type' => 'status'],
-        'priority'          => ['label' => __('Prioridade'), 'type' => 'priority'],
-        'urgency'           => ['label' => __('Urgencia'),   'type' => 'urgency'],
-        'impact'            => ['label' => __('Impacto'),    'type' => 'impact'],
-        'itilcategories_id' => ['label' => __('Categoria'),  'type' => 'dropdown', 'itemtype' => 'ITILCategory'],
+        'status'   => ['label' => __('Status'),     'type' => 'status'],
+        'priority' => ['label' => __('Prioridade'), 'type' => 'priority'],
+        'urgency'  => ['label' => __('Urgencia'),   'type' => 'urgency'],
+        'impact'   => ['label' => __('Impacto'),    'type' => 'impact'],
     ];
 
     $lines = [];
@@ -282,46 +298,8 @@ function plugin_ticketlinksync_ticket_update(Ticket $item)
 }
 
 // ---------------------------------------------------------------------
-// Tecnico / grupo atribuido (atores do tipo ASSIGN)
+// Tecnico/grupo atribuido (atores do tipo ASSIGN) foi removido da
+// propagacao em v1.4.0: mudava com frequencia alta demais e gerava ruido
+// sem valor de acompanhamento real. Os hooks correspondentes tambem foram
+// removidos do registro em setup.php.
 // ---------------------------------------------------------------------
-
-function plugin_ticketlinksync_handle_actor_change($item, bool $added): void
-{
-    $type = (int) ($item->fields['type'] ?? 0);
-
-    if ($type !== CommonITILActor::ASSIGN) {
-        return;
-    }
-
-    $child_id = (int) ($item->fields['tickets_id'] ?? 0);
-
-    if (!$child_id) {
-        return;
-    }
-
-    if ($item instanceof Ticket_User) {
-        $label = __('Tecnico');
-        $name  = getUserName((int) $item->fields['users_id']);
-    } elseif ($item instanceof Group_Ticket) {
-        $label = __('Grupo');
-        $name  = Dropdown::getDropdownName(Group::getTable(), (int) $item->fields['groups_id']);
-    } else {
-        return;
-    }
-
-    $verb    = $added ? __('atribuido') : __('removido');
-    $summary = sprintf(__('%s "%s" %s no chamado'), $label, $name, $verb);
-    $message = plugin_ticketlinksync_build_message($child_id, $summary);
-
-    plugin_ticketlinksync_add_parent_followup($child_id, $message, 1);
-}
-
-function plugin_ticketlinksync_actor_add($item)
-{
-    plugin_ticketlinksync_handle_actor_change($item, true);
-}
-
-function plugin_ticketlinksync_actor_delete($item)
-{
-    plugin_ticketlinksync_handle_actor_change($item, false);
-}

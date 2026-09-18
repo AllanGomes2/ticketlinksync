@@ -4,7 +4,7 @@ if (!defined('GLPI_ROOT')) {
     die('Sorry. You can not access directly to this file');
 }
 
-define('PLUGIN_TICKETLINKSYNC_VERSION', '1.1.0');
+define('PLUGIN_TICKETLINKSYNC_VERSION', '1.4.0');
 define('PLUGIN_TICKETLINKSYNC_MIN_GLPI', '10.0.0');
 define('PLUGIN_TICKETLINKSYNC_MAX_GLPI', '11.9.99');
 
@@ -18,21 +18,17 @@ function plugin_init_ticketlinksync()
 
     $PLUGIN_HOOKS['csrf_compliant']['ticketlinksync'] = true;
 
+    // Ticket_User/Group_Ticket (tecnico/grupo atribuido) nao sao mais
+    // registrados aqui a partir da v1.4.0 - mudavam com frequencia alta
+    // demais e geravam ruido sem valor de acompanhamento real.
     $PLUGIN_HOOKS['item_add']['ticketlinksync'] = [
         'ITILFollowup' => 'plugin_ticketlinksync_followup_add',
         'TicketTask'   => 'plugin_ticketlinksync_task_add',
         'ITILSolution' => 'plugin_ticketlinksync_solution_add',
-        'Ticket_User'  => 'plugin_ticketlinksync_actor_add',
-        'Group_Ticket' => 'plugin_ticketlinksync_actor_add',
     ];
 
     $PLUGIN_HOOKS['item_update']['ticketlinksync'] = [
         'Ticket' => 'plugin_ticketlinksync_ticket_update',
-    ];
-
-    $PLUGIN_HOOKS['item_purge']['ticketlinksync'] = [
-        'Ticket_User'  => 'plugin_ticketlinksync_actor_delete',
-        'Group_Ticket' => 'plugin_ticketlinksync_actor_delete',
     ];
 }
 
